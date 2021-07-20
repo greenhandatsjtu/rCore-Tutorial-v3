@@ -2,11 +2,11 @@ use core::cell::RefCell;
 use lazy_static::*;
 use crate::trap::TrapContext;
 
-const USER_STACK_SIZE: usize = 4096;
+pub const USER_STACK_SIZE: usize = 4096;
 const KERNEL_STACK_SIZE: usize = 4096;
 const MAX_APP_NUM: usize = 16;
-const APP_BASE_ADDRESS: usize = 0x80400000;
-const APP_SIZE_LIMIT: usize = 0x20000;
+pub const APP_BASE_ADDRESS: usize = 0x80400000;
+pub const APP_SIZE_LIMIT: usize = 0x20000;
 
 #[repr(align(4096))]
 struct KernelStack {
@@ -41,11 +41,13 @@ impl UserStack {
 struct AppManager {
     inner: RefCell<AppManagerInner>,
 }
+
 struct AppManagerInner {
     num_app: usize,
     current_app: usize,
     app_start: [usize; MAX_APP_NUM + 1],
 }
+
 unsafe impl Sync for AppManager {}
 
 impl AppManagerInner {
@@ -69,11 +71,11 @@ impl AppManagerInner {
         });
         let app_src = core::slice::from_raw_parts(
             self.app_start[app_id] as *const u8,
-            self.app_start[app_id + 1] - self.app_start[app_id]
+            self.app_start[app_id + 1] - self.app_start[app_id],
         );
         let app_dst = core::slice::from_raw_parts_mut(
             APP_BASE_ADDRESS as *mut u8,
-            app_src.len()
+            app_src.len(),
         );
         app_dst.copy_from_slice(app_src);
     }
@@ -126,4 +128,8 @@ pub fn run_next_app() -> ! {
         ) as *const _ as usize);
     }
     panic!("Unreachable in batch::run_current_app!");
+}
+
+pub fn get_app_stack() -> usize {
+    USER_STACK.get_sp()
 }

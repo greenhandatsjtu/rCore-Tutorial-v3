@@ -1,13 +1,12 @@
+use crate::batch::{APP_BASE_ADDRESS, APP_SIZE_LIMIT, get_app_stack, USER_STACK_SIZE};
+
 const FD_STDOUT: usize = 1;
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     match fd {
         FD_STDOUT => {
-            extern "C" {
-                fn skernel();
-                fn ekernel();
-            }
-            if (buf as isize) < (skernel as isize) || (buf as isize + len as isize) > (ekernel as isize) {
+            // check app mem (.bin) and user stack
+            if !((buf as usize) >= APP_BASE_ADDRESS && (buf as usize + len) <= APP_BASE_ADDRESS + APP_SIZE_LIMIT || (buf as usize) >= get_app_stack() - USER_STACK_SIZE && (buf as usize + len) <= get_app_stack()) {
                 println!("Illegal write!");
                 return -1;
             }
