@@ -57,6 +57,11 @@ impl TaskManager {
         }
     }
 
+    fn get_current_task(&self) -> usize {
+        let current = self.inner.borrow().current_task;
+        current
+    }
+
     fn mark_current_suspended(&self) {
         let mut inner = self.inner.borrow_mut();
         let current = inner.current_task;
@@ -124,4 +129,8 @@ pub fn suspend_current_and_run_next() {
 pub fn exit_current_and_run_next() {
     mark_current_exited();
     run_next_task();
+}
+
+pub fn get_current_task() -> usize {
+    TASK_MANAGER.get_current_task()
 }

@@ -85,3 +85,7 @@ pub fn init_app_cx(app_id: usize) -> &'static TaskContext {
         TaskContext::goto_restore(),
     )
 }
+
+pub fn get_app_stack(app_id:usize)->usize{
+    USER_STACK[app_id].get_sp()
+}
