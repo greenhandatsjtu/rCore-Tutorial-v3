@@ -1,5 +1,4 @@
 use log::{self, Record, Level, LevelFilter, Metadata};
-use log::info;
 
 pub fn init() {
     static LOGGER: Logger = Logger;

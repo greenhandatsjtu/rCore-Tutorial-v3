@@ -1,6 +1,6 @@
 use crate::config::{APP_BASE_ADDRESS, APP_SIZE_LIMIT, USER_STACK_SIZE};
 use crate::task::get_current_task;
-use log::{error, debug, Level::Error};
+use log::{error, debug};
 use crate::loader::get_app_stack;
 
 const FD_STDOUT: usize = 1;
