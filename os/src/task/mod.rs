@@ -59,6 +59,11 @@ impl TaskManager {
         }
     }
 
+    fn get_current_task(&self) -> usize {
+        let current = self.inner.borrow().current_task;
+        current
+    }
+
     fn mark_current_suspended(&self) {
         let mut inner = self.inner.borrow_mut();
         let current = inner.current_task;
@@ -131,6 +136,13 @@ fn mark_current_exited() {
 }
 
 pub fn suspend_current_and_run_next() {
+    // add 10 ms execute time to current task, and if execute time >= 5s, stop it, else suspend it
+    let current = TASK_MANAGER.get_current_task();
+    let mut inner = TASK_MANAGER.inner.borrow_mut();
+    let exec_time = &mut inner.tasks[current].exec_time_ms;
+    *exec_time += 10;
+    // debug!("TASK: {}, EXECUTE_TIME: {}ms",current,*exec_time);
+    core::mem::drop(inner);
     mark_current_suspended();
     run_next_task();
 }
