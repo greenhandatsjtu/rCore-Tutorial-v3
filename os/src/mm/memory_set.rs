@@ -13,8 +13,9 @@ use crate::config::{
     PAGE_SIZE,
     TRAMPOLINE,
     TRAP_CONTEXT,
-    USER_STACK_SIZE
+    USER_STACK_SIZE,
 };
+use crate::task::current_user_token;
 
 extern "C" {
     fn stext();
@@ -153,7 +154,7 @@ impl MemorySet {
                 max_end_vpn = map_area.vpn_range.get_end();
                 memory_set.push(
                     map_area,
-                    Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize])
+                    Some(&elf.input[ph.offset() as usize..(ph.offset() + ph.file_size()) as usize]),
                 );
             }
         }
@@ -188,6 +189,81 @@ impl MemorySet {
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.page_table.translate(vpn)
     }
+
+    pub fn check_all_not_mapped(&self, start: usize, end: usize) -> bool {
+        let mut start = start;
+        while start < end {
+            let start_va = VirtAddr::from(start);
+            let mut vpn = start_va.floor();
+            // check if target VPN has been mapped
+            match self.page_table.translate(vpn) {
+                Some(pte) => {
+                    if pte.is_valid() {
+                        return false;
+                    }
+                }
+                _ => {}
+            }
+            vpn.step();
+            let mut end_va: VirtAddr = vpn.into();
+            end_va = end_va.min(VirtAddr::from(end));
+            start = end_va.into();
+        }
+        true
+    }
+
+    pub fn check_all_mapped(&self, start: usize, end: usize) -> bool {
+        let mut start = start;
+        while start < end {
+            let start_va = VirtAddr::from(start);
+            let mut vpn = start_va.floor();
+            // check if target VPN has been mapped
+            match self.page_table.translate(vpn) {
+                Some(pte) => {
+                    if !pte.is_valid() {
+                        return false;
+                    }
+                }
+                _ => {
+                    return false;
+                }
+            }
+            vpn.step();
+            let mut end_va: VirtAddr = vpn.into();
+            end_va = end_va.min(VirtAddr::from(end));
+            start = end_va.into();
+        }
+        true
+    }
+
+    pub fn mmap(&mut self, start: usize, end: usize, perm: MapPermission) -> isize {
+        let area = MapArea::new(VirtAddr(start), VirtAddr(end), MapType::Framed, perm);
+        let start = area.vpn_range.get_start().0 as isize;
+        let end = area.vpn_range.get_end().0 as isize;
+        self.push(area, None);
+        (end - start) << 12
+    }
+
+    pub fn munmap(&mut self, start: usize, end: usize) -> isize {
+        let start_vpn: VirtPageNum = VirtAddr::from(start).floor();
+        let end_vpn: VirtPageNum = VirtAddr::from(end).ceil();
+        let range = VPNRange::new(start_vpn, end_vpn);
+        let mut pages: Vec<usize> = Vec::new();
+        let mut page_size: isize = 0;
+        for page in range {
+            for (i, mut area) in self.areas.iter_mut().enumerate() {
+                if area.vpn_range.get_start() <= page && area.vpn_range.get_end() >= page {
+                    area.unmap(&mut self.page_table);
+                    pages.push(i);
+                    page_size += (area.vpn_range.get_end().0 - area.vpn_range.get_start().0) as isize;
+                }
+            }
+        }
+        for i in pages {
+            self.areas.remove(i);
+        }
+        page_size << 12
+    }
 }
 
 pub struct MapArea {
@@ -202,7 +278,7 @@ impl MapArea {
         start_va: VirtAddr,
         end_va: VirtAddr,
         map_type: MapType,
-        map_perm: MapPermission
+        map_perm: MapPermission,
     ) -> Self {
         let start_vpn: VirtPageNum = start_va.floor();
         let end_vpn: VirtPageNum = end_va.ceil();

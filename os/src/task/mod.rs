@@ -11,6 +11,7 @@ use task::{TaskControlBlock, TaskStatus};
 use alloc::vec::Vec;
 
 pub use context::TaskContext;
+use crate::mm::MapPermission;
 
 pub struct TaskManager {
     num_app: usize,
@@ -117,6 +118,29 @@ impl TaskManager {
             panic!("All applications completed!");
         }
     }
+
+    pub fn mmap(&self, start: usize, len: usize, prot: usize) -> isize {
+        let inner = self.inner.borrow();
+        let current = inner.current_task;
+        if !inner.tasks[current].memory_set.check_all_not_mapped(start, start + len) {
+            return -1;
+        }
+        core::mem::drop(inner);
+        let mut inner = self.inner.borrow_mut();
+        inner.tasks[current].memory_set.mmap(start, start + len, MapPermission::from_bits((prot << 1) as u8).unwrap() | MapPermission::U)
+    }
+
+    pub fn unmap(&self, start: usize, len: usize) -> isize {
+        let inner = self.inner.borrow();
+        let current = inner.current_task;
+        if !inner.tasks[current].memory_set.check_all_mapped(start, start + len) {
+            return -1;
+        }
+        core::mem::drop(inner);
+        let mut inner = self.inner.borrow_mut();
+        let current = inner.current_task;
+        inner.tasks[current].memory_set.munmap(start, start + len)
+    }
 }
 
 pub fn run_first_task() {
@@ -158,4 +182,16 @@ pub fn current_user_token() -> usize {
 
 pub fn current_trap_cx() -> &'static mut TrapContext {
     TASK_MANAGER.get_current_trap_cx()
+}
+
+pub fn get_current_task() -> usize {
+    TASK_MANAGER.get_current_task()
+}
+
+pub fn task_mmap(start: usize, len: usize, prot: usize) -> isize {
+    TASK_MANAGER.mmap(start, len, prot)
+}
+
+pub fn task_munmap(start: usize, len: usize) -> isize {
+    TASK_MANAGER.unmap(start, len)
 }

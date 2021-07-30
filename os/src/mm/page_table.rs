@@ -124,7 +124,7 @@ impl PageTable {
     }
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.find_pte(vpn)
-            .map(|pte| {pte.clone()})
+            .map(|pte| { pte.clone() })
     }
     pub fn token(&self) -> usize {
         8usize << 60 | self.root_ppn.0
@@ -154,4 +154,25 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         start = end_va.into();
     }
     v
+}
+
+pub fn check_buf_read(token: usize, ptr: *const u8, len: usize) -> bool {
+    let page_table = PageTable::from_token(token);
+    let mut start = ptr as usize;
+    let end = start + len;
+    while start < end {
+        let start_va = VirtAddr::from(start);
+        let mut vpn = start_va.floor();
+        let pte = page_table
+            .translate(vpn)
+            .unwrap();
+        if !pte.readable() {
+            return false;
+        }
+        vpn.step();
+        let mut end_va: VirtAddr = vpn.into();
+        end_va = end_va.min(VirtAddr::from(end));
+        start = end_va.into();
+    }
+    true
 }

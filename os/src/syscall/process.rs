@@ -2,6 +2,7 @@ use crate::task::{
     suspend_current_and_run_next,
     exit_current_and_run_next,
 };
+use crate::task::{task_mmap, task_munmap};
 use crate::timer::{get_time_ms, get_time_s, get_time_us};
 
 pub fn sys_exit(exit_code: i32) -> ! {
@@ -37,4 +38,24 @@ pub fn setpriority(prio: isize) -> isize {
         return -1;
     }
     prio
+}
+
+pub fn mmap(start: usize, len: usize, prot: usize) -> isize {
+    if prot & 7 == 0 || prot & !(7 as usize) != 0 || start & 1 << 12 - 1 != 0 {
+        return -1;
+    }
+    if len == 0 {
+        return 0;
+    }
+    if start & 0xfff != 0 {
+        return -1;
+    }
+    task_mmap(start, len, prot)
+}
+
+pub fn munmap(start: usize, len: usize) -> isize {
+    if start & 0xfff != 0 {
+        return -1;
+    };
+    task_munmap(start, len)
 }

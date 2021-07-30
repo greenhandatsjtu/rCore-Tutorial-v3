@@ -13,14 +13,10 @@ use riscv::register::{
     sie,
 };
 use crate::syscall::syscall;
-use crate::task::{
-    exit_current_and_run_next,
-    suspend_current_and_run_next,
-    current_user_token,
-    current_trap_cx,
-};
+use crate::task::{exit_current_and_run_next, suspend_current_and_run_next, current_user_token, current_trap_cx, get_current_task};
 use crate::timer::set_next_trigger;
 use crate::config::{TRAP_CONTEXT, TRAMPOLINE};
+use log::*;
 
 global_asm!(include_str!("trap.S"));
 
@@ -56,8 +52,8 @@ pub fn trap_handler() -> ! {
             cx.x[10] = syscall(cx.x[17], [cx.x[10], cx.x[11], cx.x[12]]) as usize;
         }
         Trap::Exception(Exception::StoreFault) |
-        Trap::Exception(Exception::StorePageFault) => {
-            println!("[kernel] PageFault in application, bad addr = {:#x}, bad instruction = {:#x}, core dumped.", stval, cx.sepc);
+        Trap::Exception(Exception::StorePageFault) | Trap::Exception(Exception::LoadPageFault) => {
+            println!("[kernel] Task {} PageFault in application, bad addr = {:#x}, bad instruction = {:#x}, core dumped.", get_current_task(), stval, cx.sepc);
             exit_current_and_run_next();
         }
         Trap::Exception(Exception::IllegalInstruction) => {
