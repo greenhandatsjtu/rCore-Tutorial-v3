@@ -5,7 +5,7 @@ use super::{
     VirtPageNum,
     VirtAddr,
     PhysAddr,
-    StepByOne
+    StepByOne,
 };
 use alloc::vec::Vec;
 use alloc::vec;
@@ -133,7 +133,7 @@ impl PageTable {
     }
     pub fn translate(&self, vpn: VirtPageNum) -> Option<PageTableEntry> {
         self.find_pte(vpn)
-            .map(|pte| {pte.clone()})
+            .map(|pte| { pte.clone() })
     }
     pub fn translate_va(&self, va: VirtAddr) -> Option<PhysAddr> {
         self.find_pte(va.clone().floor())
@@ -174,6 +174,27 @@ pub fn translated_byte_buffer(token: usize, ptr: *const u8, len: usize) -> Vec<&
         start = end_va.into();
     }
     v
+}
+
+pub fn check_buf_read(token: usize, ptr: *const u8, len: usize) -> bool {
+    let page_table = PageTable::from_token(token);
+    let mut start = ptr as usize;
+    let end = start + len;
+    while start < end {
+        let start_va = VirtAddr::from(start);
+        let mut vpn = start_va.floor();
+        let pte = page_table
+            .translate(vpn)
+            .unwrap();
+        if !pte.readable() {
+            return false;
+        }
+        vpn.step();
+        let mut end_va: VirtAddr = vpn.into();
+        end_va = end_va.min(VirtAddr::from(end));
+        start = end_va.into();
+    }
+    true
 }
 
 pub fn translated_str(token: usize, ptr: *const u8) -> String {

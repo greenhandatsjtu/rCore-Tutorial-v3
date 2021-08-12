@@ -13,12 +13,7 @@ use riscv::register::{
     sie,
 };
 use crate::syscall::syscall;
-use crate::task::{
-    exit_current_and_run_next,
-    suspend_current_and_run_next,
-    current_user_token,
-    current_trap_cx,
-};
+use crate::task::{exit_current_and_run_next, suspend_current_and_run_next, current_user_token, current_trap_cx};
 use crate::timer::set_next_trigger;
 use crate::config::{TRAP_CONTEXT, TRAMPOLINE};
 
