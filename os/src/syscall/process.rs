@@ -36,8 +36,9 @@ pub struct TimeVal {
 }
 
 pub fn gettime(ts: &mut TimeVal, _tz: usize) -> isize {
-    ts.sec = get_time_s();
-    ts.usec = get_time_us();
+    let token = current_user_token();
+    translated_refmut(token, ts).sec = get_time_s();
+    translated_refmut(token, ts).usec = get_time_us();
     0
 }
 
@@ -66,7 +67,9 @@ pub fn munmap(start: usize, len: usize) -> isize {
         return -1;
     };
     task_munmap(start, len)
-}pub fn sys_getpid() -> isize {
+}
+
+pub fn sys_getpid() -> isize {
     current_task().unwrap().pid.0 as isize
 }
 
@@ -106,7 +109,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
     let mut inner = task.acquire_inner_lock();
     if inner.children
         .iter()
-        .find(|p| {pid == -1 || pid as usize == p.getpid()})
+        .find(|p| { pid == -1 || pid as usize == p.getpid() })
         .is_none() {
         return -1;
         // ---- release current PCB lock
@@ -133,4 +136,22 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         -2
     }
     // ---- release current PCB lock automatically
+}
+
+pub fn sys_spawn(file: *const u8) -> isize {
+    let current = current_task().unwrap();
+    let new_task = current.fork();
+    let new_pid = new_task.pid.0;
+    let trap_cx = new_task.acquire_inner_lock().get_trap_cx();
+    trap_cx.x[10] = 0;
+    let token = current_user_token();
+    let path = translated_str(token, file);
+    if let Some(data) = get_app_data_by_name(path.as_str()) {
+        new_task.exec(data);
+        add_task(new_task);
+        new_pid as isize
+    } else {
+        add_task(new_task);
+        -1
+    }
 }

@@ -20,6 +20,18 @@ fn insert_app_data() -> Result<()> {
             name_with_ext
         })
         .collect();
+    read_dir(TARGET_PATH)
+        .unwrap()
+        .into_iter()
+        .filter(|dir_entry| {
+            let name_with_ext = dir_entry.as_ref().unwrap().file_name().into_string().unwrap();
+            name_with_ext.starts_with("ch")
+        })
+        .for_each(|dir_entry| {
+            let mut name_with_ext = dir_entry.unwrap().file_name().into_string().unwrap();
+            apps.push(name_with_ext);
+            // name_with_ext.drain(name_with_ext.find('.').unwrap()..name_with_ext.len());
+        });
     apps.sort();
 
     writeln!(f, r#"
