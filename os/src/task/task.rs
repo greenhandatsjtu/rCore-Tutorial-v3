@@ -19,6 +19,7 @@ pub struct TaskControlBlock {
 
 pub struct TaskControlBlockInner {
     pub trap_cx_ppn: PhysPageNum,
+    pub exec_time_ms: usize,
     pub base_size: usize,
     pub task_cx_ptr: usize,
     pub task_status: TaskStatus,
@@ -78,6 +79,7 @@ impl TaskControlBlock {
             kernel_stack,
             inner: Mutex::new(TaskControlBlockInner {
                 trap_cx_ppn,
+                exec_time_ms: 0,
                 base_size: user_sp,
                 task_cx_ptr: task_cx_ptr as usize,
                 task_status: TaskStatus::Ready,
@@ -162,6 +164,7 @@ impl TaskControlBlock {
             kernel_stack,
             inner: Mutex::new(TaskControlBlockInner {
                 trap_cx_ppn,
+                exec_time_ms: 0,
                 base_size: parent_inner.base_size,
                 task_cx_ptr: task_cx_ptr as usize,
                 task_status: TaskStatus::Ready,

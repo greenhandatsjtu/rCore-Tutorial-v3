@@ -1,10 +1,15 @@
-use crate::mm::{UserBuffer, translated_byte_buffer, translated_refmut};
+use crate::mm::{UserBuffer, translated_byte_buffer, translated_refmut, check_buf_read};
 use crate::task::{current_user_token, current_task};
 use crate::fs::{make_pipe};
+use log::error;
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     let token = current_user_token();
     let task = current_task().unwrap();
+    if !check_buf_read(token, buf, len) {
+        error!("Illegal write! PID: {}, BUF_ADDR: [{:#x},{:#x})",task.pid.0,buf as usize,buf as usize+len);
+        return -1;
+    }
     let inner = task.acquire_inner_lock();
     if fd >= inner.fd_table.len() {
         return -1;

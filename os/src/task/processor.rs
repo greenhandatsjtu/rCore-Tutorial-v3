@@ -5,6 +5,7 @@ use lazy_static::*;
 use super::{fetch_task, TaskStatus};
 use super::__switch;
 use crate::trap::TrapContext;
+use crate::mm::MapPermission;
 
 pub struct Processor {
     inner: RefCell<ProcessorInner>,
@@ -55,6 +56,23 @@ impl Processor {
     }
     pub fn current(&self) -> Option<Arc<TaskControlBlock>> {
         self.inner.borrow().current.as_ref().map(|task| Arc::clone(task))
+    }
+    pub fn mmap(&self, start: usize, len: usize, prot: usize) -> isize {
+        let current = self.current().unwrap();
+        let mut current = current.acquire_inner_lock();
+        if !current.memory_set.check_all_not_mapped(start, start + len) {
+            return -1;
+        }
+        current.memory_set.mmap(start, start + len, MapPermission::from_bits((prot << 1) as u8).unwrap() | MapPermission::U)
+    }
+
+    pub fn unmap(&self, start: usize, len: usize) -> isize {
+        let current = self.current().unwrap();
+        let mut current = current.acquire_inner_lock();
+        if !current.memory_set.check_all_mapped(start, start + len) {
+            return -1;
+        }
+        current.memory_set.munmap(start, start + len)
     }
 }
 

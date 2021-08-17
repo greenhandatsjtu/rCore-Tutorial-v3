@@ -11,7 +11,7 @@ pub struct TaskManager {
 /// A simple FIFO scheduler.
 impl TaskManager {
     pub fn new() -> Self {
-        Self { ready_queue: VecDeque::new(), }
+        Self { ready_queue: VecDeque::new() }
     }
     pub fn add(&mut self, task: Arc<TaskControlBlock>) {
         self.ready_queue.push_back(task);
