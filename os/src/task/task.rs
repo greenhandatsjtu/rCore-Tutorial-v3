@@ -7,7 +7,7 @@ use alloc::sync::{Weak, Arc};
 use alloc::vec;
 use alloc::vec::Vec;
 use spin::{Mutex, MutexGuard};
-use crate::fs::{File, Stdin, Stdout};
+use crate::fs::{File, Stdin, Stdout, Mailbox};
 
 pub struct TaskControlBlock {
     // immutable
@@ -28,6 +28,7 @@ pub struct TaskControlBlockInner {
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
+    pub mailbox: Mailbox,
 }
 
 impl TaskControlBlockInner {
@@ -95,6 +96,7 @@ impl TaskControlBlock {
                     // 2 -> stderr
                     Some(Arc::new(Stdout)),
                 ],
+                mailbox: Mailbox::new(),
             }),
         };
         // prepare TrapContext in user space
@@ -173,6 +175,7 @@ impl TaskControlBlock {
                 children: Vec::new(),
                 exit_code: 0,
                 fd_table: new_fd_table,
+                mailbox: Mailbox::new(),
             }),
         });
         // add child
@@ -189,7 +192,6 @@ impl TaskControlBlock {
     pub fn getpid(&self) -> usize {
         self.pid.0
     }
-
 }
 
 #[derive(Copy, Clone, PartialEq)]

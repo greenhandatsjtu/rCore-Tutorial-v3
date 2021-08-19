@@ -3,6 +3,7 @@ use alloc::collections::VecDeque;
 use alloc::sync::Arc;
 use spin::Mutex;
 use lazy_static::*;
+use crate::task::PidHandle;
 
 pub struct TaskManager {
     ready_queue: VecDeque<Arc<TaskControlBlock>>,
@@ -18,6 +19,15 @@ impl TaskManager {
     }
     pub fn fetch(&mut self) -> Option<Arc<TaskControlBlock>> {
         self.ready_queue.pop_front()
+    }
+    ///get TaskControlBlock of given PidHandle
+    pub fn get(&self, pid: usize) -> Option<Arc<TaskControlBlock>> {
+        for task in &self.ready_queue {
+            if task.pid.0 == pid {
+                return Option::Some(task.clone());
+            }
+        }
+        Option::None
     }
 }
 
