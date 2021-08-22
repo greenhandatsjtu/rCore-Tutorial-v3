@@ -5,12 +5,13 @@ use crate::task::{
     current_user_token,
     add_task,
 };
-use crate::timer::get_time_ms;
+use crate::timer::{get_time_ms, get_time_s, get_time_us};
 use crate::mm::{
     translated_str,
     translated_refmut,
     translated_ref,
 };
+use crate::task::{task_mmap, task_munmap};
 use crate::fs::{
     open_file,
     OpenFlags,
@@ -31,6 +32,47 @@ pub fn sys_yield() -> isize {
 
 pub fn sys_get_time() -> isize {
     get_time_ms() as isize
+}
+
+#[repr(C)]
+#[derive(Debug)]
+pub struct TimeVal {
+    pub sec: usize,
+    pub usec: usize,
+}
+
+pub fn gettime(ts: &mut TimeVal, _tz: usize) -> isize {
+    let token = current_user_token();
+    translated_refmut(token, ts).sec = get_time_s();
+    translated_refmut(token, ts).usec = get_time_us();
+    0
+}
+
+pub fn setpriority(prio: isize) -> isize {
+    if prio <= 1 {
+        return -1;
+    }
+    prio
+}
+
+pub fn mmap(start: usize, len: usize, prot: usize) -> isize {
+    if prot & 7 == 0 || prot & !(7 as usize) != 0 || start & 1 << 12 - 1 != 0 {
+        return -1;
+    }
+    if len == 0 {
+        return 0;
+    }
+    if start & 0xfff != 0 {
+        return -1;
+    }
+    task_mmap(start, len, prot)
+}
+
+pub fn munmap(start: usize, len: usize) -> isize {
+    if start & 0xfff != 0 {
+        return -1;
+    };
+    task_munmap(start, len)
 }
 
 pub fn sys_getpid() -> isize {
@@ -85,7 +127,7 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
     let mut inner = task.acquire_inner_lock();
     if inner.children
         .iter()
-        .find(|p| {pid == -1 || pid as usize == p.getpid()})
+        .find(|p| { pid == -1 || pid as usize == p.getpid() })
         .is_none() {
         return -1;
         // ---- release current PCB lock
@@ -112,4 +154,23 @@ pub fn sys_waitpid(pid: isize, exit_code_ptr: *mut i32) -> isize {
         -2
     }
     // ---- release current PCB lock automatically
+}
+
+pub fn sys_spawn(file: *const u8) -> isize {
+    let current = current_task().unwrap();
+    let new_task = current.fork();
+    let new_pid = new_task.pid.0;
+    let trap_cx = new_task.acquire_inner_lock().get_trap_cx();
+    trap_cx.x[10] = 0;
+    let token = current_user_token();
+    let path = translated_str(token, file);
+    if let Some(app_inode) = open_file(path.as_str(), OpenFlags::RDONLY) {
+        let all_data = app_inode.read_all();
+        new_task.exec(all_data.as_slice(), Vec::new());
+        add_task(new_task);
+        new_pid as isize
+    } else {
+        add_task(new_task);
+        -1
+    }
 }

@@ -1,7 +1,7 @@
 use crate::mm::{
     MemorySet,
     PhysPageNum,
-    KERNEL_SPACE, 
+    KERNEL_SPACE,
     VirtAddr,
     translated_refmut,
 };
@@ -14,7 +14,7 @@ use alloc::vec;
 use alloc::vec::Vec;
 use alloc::string::String;
 use spin::{Mutex, MutexGuard};
-use crate::fs::{File, Stdin, Stdout};
+use crate::fs::{File, Stdin, Stdout, Mailbox};
 
 pub struct TaskControlBlock {
     // immutable
@@ -26,6 +26,7 @@ pub struct TaskControlBlock {
 
 pub struct TaskControlBlockInner {
     pub trap_cx_ppn: PhysPageNum,
+    pub exec_time_ms: usize,
     pub base_size: usize,
     pub task_cx_ptr: usize,
     pub task_status: TaskStatus,
@@ -34,6 +35,7 @@ pub struct TaskControlBlockInner {
     pub children: Vec<Arc<TaskControlBlock>>,
     pub exit_code: i32,
     pub fd_table: Vec<Option<Arc<dyn File + Send + Sync>>>,
+    pub mailbox: Mailbox,
 }
 
 impl TaskControlBlockInner {
@@ -85,6 +87,7 @@ impl TaskControlBlock {
             kernel_stack,
             inner: Mutex::new(TaskControlBlockInner {
                 trap_cx_ppn,
+                exec_time_ms: 0,
                 base_size: user_sp,
                 task_cx_ptr: task_cx_ptr as usize,
                 task_status: TaskStatus::Ready,
@@ -100,6 +103,7 @@ impl TaskControlBlock {
                     // 2 -> stderr
                     Some(Arc::new(Stdout)),
                 ],
+                mailbox: Mailbox::new(),
             }),
         };
         // prepare TrapContext in user space
@@ -127,7 +131,7 @@ impl TaskControlBlock {
             .map(|arg| {
                 translated_refmut(
                     memory_set.token(),
-                    (argv_base + arg * core::mem::size_of::<usize>()) as *mut usize
+                    (argv_base + arg * core::mem::size_of::<usize>()) as *mut usize,
                 )
             })
             .collect();
@@ -195,6 +199,7 @@ impl TaskControlBlock {
             kernel_stack,
             inner: Mutex::new(TaskControlBlockInner {
                 trap_cx_ppn,
+                exec_time_ms: 0,
                 base_size: parent_inner.base_size,
                 task_cx_ptr: task_cx_ptr as usize,
                 task_status: TaskStatus::Ready,
@@ -203,6 +208,7 @@ impl TaskControlBlock {
                 children: Vec::new(),
                 exit_code: 0,
                 fd_table: new_fd_table,
+                mailbox: Mailbox::new(),
             }),
         });
         // add child
@@ -219,7 +225,6 @@ impl TaskControlBlock {
     pub fn getpid(&self) -> usize {
         self.pid.0
     }
-
 }
 
 #[derive(Copy, Clone, PartialEq)]

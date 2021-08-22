@@ -8,6 +8,7 @@ mod pid;
 use crate::fs::{open_file, OpenFlags};
 use switch::__switch;
 use task::{TaskControlBlock, TaskStatus};
+use processor::PROCESSOR;
 use alloc::sync::Arc;
 use manager::fetch_task;
 use lazy_static::*;
@@ -21,7 +22,7 @@ pub use processor::{
     take_current_task,
     schedule,
 };
-pub use manager::add_task;
+pub use manager::{add_task, TASK_MANAGER};
 pub use pid::{PidHandle, pid_alloc, KernelStack};
 
 pub fn suspend_current_and_run_next() {
@@ -33,6 +34,8 @@ pub fn suspend_current_and_run_next() {
     let task_cx_ptr2 = task_inner.get_task_cx_ptr2();
     // Change status to Ready
     task_inner.task_status = TaskStatus::Ready;
+    let exec_time = &mut task_inner.exec_time_ms;
+    *exec_time += 10;
     drop(task_inner);
     // ---- release current PCB lock
 
@@ -73,6 +76,14 @@ pub fn exit_current_and_run_next(exit_code: i32) {
     // we do not have to save task context
     let _unused: usize = 0;
     schedule(&_unused as *const _);
+}
+
+pub fn task_mmap(start: usize, len: usize, prot: usize) -> isize {
+    PROCESSOR.mmap(start, len, prot)
+}
+
+pub fn task_munmap(start: usize, len: usize) -> isize {
+    PROCESSOR.unmap(start, len)
 }
 
 lazy_static! {
