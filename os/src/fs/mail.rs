@@ -3,8 +3,6 @@ use alloc::vec::Vec;
 use spin::Mutex;
 use crate::fs::File;
 use crate::mm::UserBuffer;
-use core::ptr::copy;
-use core::marker::Copy;
 
 
 pub struct Mailbox {

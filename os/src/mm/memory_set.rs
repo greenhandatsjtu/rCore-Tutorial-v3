@@ -292,7 +292,7 @@ impl MemorySet {
         let mut pages: Vec<usize> = Vec::new();
         let mut page_size: isize = 0;
         for page in range {
-            for (i, mut area) in self.areas.iter_mut().enumerate() {
+            for (i, area) in self.areas.iter_mut().enumerate() {
                 if area.vpn_range.get_start() <= page && area.vpn_range.get_end() >= page {
                     area.unmap(&mut self.page_table);
                     pages.push(i);
