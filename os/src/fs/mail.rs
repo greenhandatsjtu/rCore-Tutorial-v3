@@ -3,6 +3,7 @@ use alloc::vec::Vec;
 use spin::Mutex;
 use crate::fs::File;
 use crate::mm::UserBuffer;
+use core::any::Any;
 
 
 pub struct Mailbox {
@@ -73,6 +74,10 @@ impl MailboxRingBuffer {
 }
 
 impl File for Mailbox {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn readable(&self) -> bool {
         true
     }

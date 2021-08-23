@@ -2,12 +2,17 @@ use super::File;
 use crate::mm::{UserBuffer};
 use crate::sbi::console_getchar;
 use crate::task::suspend_current_and_run_next;
+use core::any::Any;
 
 pub struct Stdin;
 
 pub struct Stdout;
 
 impl File for Stdin {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn readable(&self) -> bool { true }
     fn writable(&self) -> bool { false }
     fn read(&self, mut user_buf: UserBuffer) -> usize {
@@ -33,6 +38,10 @@ impl File for Stdin {
 }
 
 impl File for Stdout {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn readable(&self) -> bool { false }
     fn writable(&self) -> bool { true }
     fn read(&self, _user_buf: UserBuffer) -> usize{

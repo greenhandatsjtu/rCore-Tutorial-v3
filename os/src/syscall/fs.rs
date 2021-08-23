@@ -1,8 +1,9 @@
 use crate::mm::{UserBuffer, translated_byte_buffer, translated_refmut, check_buf_read, translated_str};
 use crate::task::{current_user_token, current_task, TASK_MANAGER};
-use crate::fs::{make_pipe, File, OpenFlags, open_file};
+use crate::fs::{make_pipe, File, OpenFlags, open_file, linkat, unlinkat, OSInode};
 use log::error;
 use alloc::sync::Arc;
+use easy_fs::Stat;
 
 pub fn sys_write(fd: usize, buf: *const u8, len: usize) -> isize {
     let token = current_user_token();
@@ -60,13 +61,13 @@ pub fn sys_read(fd: usize, buf: *const u8, len: usize) -> isize {
     }
 }
 
-pub fn sys_open(path: *const u8, flags: u32) -> isize {
+pub fn sys_open(_dirfd: usize, path: *const u8, flags: u32, _mode: u32) -> isize {
     let task = current_task().unwrap();
     let token = current_user_token();
     let path = translated_str(token, path);
     if let Some(inode) = open_file(
         path.as_str(),
-        OpenFlags::from_bits(flags).unwrap()
+        OpenFlags::from_bits(flags).unwrap(),
     ) {
         let mut inner = task.acquire_inner_lock();
         let fd = inner.alloc_fd();
@@ -116,9 +117,9 @@ pub fn mailread(buf: *mut u8, mut len: usize) -> isize {
         len = 256
     }
     let token = current_user_token();
-    let buffers = match translated_byte_buffer(token,buf,len){
-        Some(b)=>b,
-        None=>return -1,
+    let buffers = match translated_byte_buffer(token, buf, len) {
+        Some(b) => b,
+        None => return -1,
     };
     let user_buf = UserBuffer::new(buffers);
     let count = task.acquire_inner_lock().mailbox.read(user_buf) as isize;
@@ -147,14 +148,15 @@ pub fn mailwrite(pid: usize, buf: *mut u8, mut len: usize) -> isize {
         len = 256
     }
     let token = current_user_token();
-    let buffers = match translated_byte_buffer(token,buf,len){
-        Some(b)=>b,
-        None=>return -1,
+    let buffers = match translated_byte_buffer(token, buf, len) {
+        Some(b) => b,
+        None => return -1,
     };
     let user_buf = UserBuffer::new(buffers);
     let count = task.acquire_inner_lock().mailbox.write(user_buf) as isize;
     count
 }
+
 pub fn sys_dup(fd: usize) -> isize {
     let task = current_task().unwrap();
     let mut inner = task.acquire_inner_lock();
@@ -167,4 +169,37 @@ pub fn sys_dup(fd: usize) -> isize {
     let new_fd = inner.alloc_fd();
     inner.fd_table[new_fd] = Some(Arc::clone(inner.fd_table[fd].as_ref().unwrap()));
     new_fd as isize
+}
+
+pub fn sys_linkat(_olddirfd: i32, oldpath: *const u8, _newdirfd: i32, newpath: *const u8, _flags: u32) -> i32 {
+    let token = current_user_token();
+    let old_path = translated_str(token, oldpath);
+    let new_path = translated_str(token, newpath);
+    linkat(old_path.as_str(), new_path.as_str())
+}
+
+pub fn sys_unlinkat(_dirfd: i32, path: *const u8, _flags: u32) -> i32 {
+    let token = current_user_token();
+    let path = translated_str(token, path);
+    unlinkat(path.as_str())
+}
+
+pub fn sys_fstat(fd: i32, st: *mut Stat) -> i32 {
+    let task = current_task().unwrap();
+    let inner = task.acquire_inner_lock();
+    if inner.fd_table.len() <= fd as usize {
+        return -1;
+    }
+    let file = match &inner.fd_table[fd as usize] {
+        Some(f) => f.clone(),
+        None => {
+            return -1;
+        }
+    };
+    drop(inner);
+    let inode = match file.as_any().downcast_ref::<OSInode>() {
+        Some(i) => i,
+        None => { return -1; }
+    };
+    inode.stat(st)
 }

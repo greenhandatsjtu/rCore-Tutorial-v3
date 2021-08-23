@@ -1,7 +1,4 @@
-use easy_fs::{
-    EasyFileSystem,
-    Inode,
-};
+use easy_fs::{EasyFileSystem, Inode, Stat};
 use crate::drivers::BLOCK_DEVICE;
 use alloc::sync::Arc;
 use lazy_static::*;
@@ -9,11 +6,15 @@ use bitflags::*;
 use alloc::vec::Vec;
 use spin::Mutex;
 use super::File;
-use crate::mm::UserBuffer;
+use crate::mm::{UserBuffer, translated_refmut};
+use core::any::Any;
+use alloc::string::String;
+use crate::task::current_user_token;
 
 pub struct OSInode {
     readable: bool,
     writable: bool,
+    path: String,
     inner: Mutex<OSInodeInner>,
 }
 
@@ -26,11 +27,13 @@ impl OSInode {
     pub fn new(
         readable: bool,
         writable: bool,
+        path: String,
         inode: Arc<Inode>,
     ) -> Self {
         Self {
             readable,
             writable,
+            path: String::from(path),
             inner: Mutex::new(OSInodeInner {
                 offset: 0,
                 inode,
@@ -51,6 +54,20 @@ impl OSInode {
         }
         v
     }
+    pub fn stat(&self, stat: *mut Stat) -> i32 {
+        let inode = self.inner.lock().inode.clone();
+        let result = ROOT_INODE.stat(inode.clone(), self.path.clone());
+        if result.is_none() {
+            return -1;
+        }
+        drop(inode);
+        let result = result.unwrap();
+        let token = current_user_token();
+        translated_refmut(token, stat).ino = result.ino;
+        translated_refmut(token, stat).mode = result.mode;
+        translated_refmut(token, stat).nlink = result.nlink;
+        0
+    }
 }
 
 lazy_static! {
@@ -58,6 +75,20 @@ lazy_static! {
         let efs = EasyFileSystem::open(BLOCK_DEVICE.clone());
         Arc::new(EasyFileSystem::root_inode(&efs))
     };
+}
+
+pub fn linkat(old_path: &str, new_path: &str) -> i32 {
+    match ROOT_INODE.linkat(old_path, new_path) {
+        Some(_) => 0,
+        None => -1
+    }
+}
+
+pub fn unlinkat(path: &str) -> i32 {
+    match ROOT_INODE.unlinkat(path) {
+        Some(_) => 0,
+        None => -1
+    }
 }
 
 pub fn list_apps() {
@@ -101,6 +132,7 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
             Some(Arc::new(OSInode::new(
                 readable,
                 writable,
+                String::from(name),
                 inode,
             )))
         } else {
@@ -110,6 +142,7 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
                     Arc::new(OSInode::new(
                         readable,
                         writable,
+                        String::from(name),
                         inode,
                     ))
                 })
@@ -123,13 +156,18 @@ pub fn open_file(name: &str, flags: OpenFlags) -> Option<Arc<OSInode>> {
                 Arc::new(OSInode::new(
                     readable,
                     writable,
-                    inode
+                    String::from(name),
+                    inode,
                 ))
             })
     }
 }
 
 impl File for OSInode {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn readable(&self) -> bool { self.readable }
     fn writable(&self) -> bool { self.writable }
     fn read(&self, mut buf: UserBuffer) -> usize {

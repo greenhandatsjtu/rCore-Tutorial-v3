@@ -5,6 +5,7 @@ use crate::mm::{
     UserBuffer,
 };
 use crate::task::suspend_current_and_run_next;
+use core::any::Any;
 
 pub struct Pipe {
     readable: bool,
@@ -113,6 +114,10 @@ pub fn make_pipe() -> (Arc<Pipe>, Arc<Pipe>) {
 }
 
 impl File for Pipe {
+    fn as_any(&self) -> &dyn Any {
+        self
+    }
+
     fn readable(&self) -> bool { self.readable }
     fn writable(&self) -> bool { self.writable }
     fn read(&self, buf: UserBuffer) -> usize {
